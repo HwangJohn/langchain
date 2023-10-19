@@ -131,6 +131,7 @@ class ApproxRetrievalStrategy(BaseRetrievalStrategy):
         text_field: str,
         filter: List[dict],
         similarity: Union[DistanceStrategy, None],
+        rrf: dict,
     ) -> Dict:
         knn = {
             "filter": filter,
@@ -161,6 +162,8 @@ class ApproxRetrievalStrategy(BaseRetrievalStrategy):
 
         # If hybrid, add a query to the knn query
         # RRF is used to even the score from the knn query and text query
+        # RRF has two optional parameters: {'rank_constant':int, 'window_size':int}
+        # https://www.elastic.co/guide/en/elasticsearch/reference/current/rrf.html
         if self.hybrid:
             return {
                 "knn": knn,
@@ -178,7 +181,7 @@ class ApproxRetrievalStrategy(BaseRetrievalStrategy):
                         "filter": filter,
                     }
                 },
-                "rank": {"rrf": {}},
+                "rank": {"rrf": rrf},
             }
         else:
             return {"knn": knn}
@@ -709,6 +712,7 @@ class ElasticsearchStore(VectorStore):
         fields: Optional[List[str]] = None,
         filter: Optional[List[dict]] = None,
         custom_query: Optional[Callable[[Dict, Union[str, None]], Dict]] = None,
+        rrf: Optional[dict] = {},
     ) -> List[Tuple[Document, float]]:
         """Return Elasticsearch documents most similar to query, along with scores.
 
@@ -723,6 +727,11 @@ class ElasticsearchStore(VectorStore):
             filter: Array of Elasticsearch filter clauses to apply to the query.
             custom_query: Function to modify the Elasticsearch
                          query body before it is sent to Elasticsearch.
+            rrf: Optional. If the hybrid is True, rrf(Reciprocal Rank Fusion)
+                 could be passed for adjusting 'rank_constant' and 'window_size'
+                 to combine multiple result sets with different relevance indicators
+                 into a single result set.
+                 Defaults to {}.
 
         Returns:
             List of Documents most similar to the query and score for each
@@ -748,6 +757,7 @@ class ElasticsearchStore(VectorStore):
             text_field=self.query_field,
             filter=filter or [],
             similarity=self.distance_strategy,
+            rrf=rrf,
         )
 
         logger.debug(f"Query body: {query_body}")
